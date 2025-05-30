@@ -126,5 +126,35 @@ def get_user_cart_details(user_id):
         }), 500
 
 
+@app.route('/api/cart/remove', methods=['POST'])
+def remove_cart_items():
+    try:
+        data = request.json
+        user_id = data.get('user_id')
+        product_id = data.get('product_id')
+        quantity = data.get('quantity', 1)  # Default quantity to 1 if not provided
+
+        if not user_id or not product_id:
+            return jsonify({"error": "user_id and product_id are required"}), 400
+
+        cart_add = dbh.decrease_or_remove_cart_item(user_id, product_id, quantity)
+
+        if cart_add:
+            return jsonify({
+                "message": "Product removed from cart successfully",
+                "data": {
+                    "user_id": user_id,
+                    "product_id": product_id,
+                    "quantity": quantity
+                }
+            }), 200
+        else:
+            return jsonify({"error": "Failed to remove product from cart"}), 500
+
+    except Exception as e:
+        logging.error(f"Exception in /api/cart/remove: {str(e)}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True)

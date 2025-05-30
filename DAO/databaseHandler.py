@@ -150,3 +150,53 @@ def fetch_cart_details(user_id):
     except mysql.connector.Error as err:
         logging.error(f"Error in fetch_cart_details: {err}")
         return None
+
+
+def decrease_or_remove_cart_item(user_id, product_id, quantity):
+    try:
+        cnx = db_engine()
+        if cnx is None:
+            return False
+
+        cursor = cnx.cursor()
+
+        # Step 1: Get current quantity
+        select_query = """
+            SELECT quantity FROM cart_items
+            WHERE user_id = %s AND product_id = %s
+        """
+        cursor.execute(select_query, (user_id, product_id))
+        result = cursor.fetchone()
+
+        if result is None:
+            cursor.close()
+            cnx.close()
+            return False  # Item not found in cart
+
+        current_quantity = result[0]
+        new_quantity = current_quantity - quantity
+
+        if new_quantity > 0:
+            # Step 2: Update quantity
+            update_query = """
+                UPDATE cart_items
+                SET quantity = %s
+                WHERE user_id = %s AND product_id = %s
+            """
+            cursor.execute(update_query, (new_quantity, user_id, product_id))
+        else:
+            # Step 3: Delete the item
+            delete_query = """
+                DELETE FROM cart_items
+                WHERE user_id = %s AND product_id = %s
+            """
+            cursor.execute(delete_query, (user_id, product_id))
+
+        cnx.commit()
+        cursor.close()
+        cnx.close()
+        return True
+
+    except mysql.connector.Error as err:
+        logging.error(f"Error in decrease_or_remove_cart_item: {err}")
+        return False
