@@ -156,5 +156,21 @@ def remove_cart_items():
         return jsonify({"error": "Internal server error"}), 500
 
 
+@app.route('/api/search/products', methods=['GET'])
+def search_products():
+    try:
+        search_term = request.args.get('search', default=None)
+        products = dbh.fetch_products_with_search(search_term=search_term)
+        return jsonify({
+            "message": "Fetched searched products successfully",
+            "data": {"products": products}
+        }), 200
+    except Exception as e:
+        logging.error(f"An error occurred getting products: {str(e)}")
+        return jsonify({
+            "message": f"An error occurred getting products: {str(e)}"
+        }), 500
+
+
 if __name__ == '__main__':
     app.run(debug=True)

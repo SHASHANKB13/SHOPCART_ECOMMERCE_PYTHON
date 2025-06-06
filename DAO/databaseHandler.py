@@ -1,11 +1,9 @@
 import mysql.connector
 import mysql
 import logging
-
-from flask import jsonify
-
+from rapidfuzz import fuzz, process
 import Controllers.constant as constants
-import json
+
 
 
 def db_engine():
@@ -200,3 +198,95 @@ def decrease_or_remove_cart_item(user_id, product_id, quantity):
     except mysql.connector.Error as err:
         logging.error(f"Error in decrease_or_remove_cart_item: {err}")
         return False
+
+# def fetch_products_with_search(search_term=None):
+#     try:
+#         cnx = db_engine()
+#         if cnx is None:
+#             logging.error("Database connection failed.")
+#             return []
+#
+#         cursor = cnx.cursor(dictionary=True)
+#
+#         if search_term:
+#             query = """
+#                 SELECT * FROM products
+#                 WHERE name LIKE %s OR brand LIKE %s OR category LIKE %s
+#             """
+#             like_term = f"%{search_term}%"
+#             cursor.execute(query, (like_term, like_term, like_term))
+#         else:
+#             query = "SELECT * FROM products;"
+#             cursor.execute(query)
+#
+#         products_data = cursor.fetchall()
+#         cursor.close()
+#         cnx.close()
+#         return products_data
+#
+#     except Exception as e:
+#         logging.error(f"Error occurred in fetch_products: {str(e)}")
+#         return []
+
+
+
+from rapidfuzz import fuzz, process
+
+def fetch_products_with_search(search_term=None):
+    try:
+        cnx = db_engine()
+        if cnx is None:
+            logging.error("Database connection failed.")
+            return []
+
+        cursor = cnx.cursor(dictionary=True)
+
+        # Always fetch all products for fallback fuzzy matching
+        cursor.execute("SELECT * FROM products;")
+        all_products = cursor.fetchall()
+
+        matched_products = []
+
+        if search_term:
+            # Try normal LIKE SQL search first
+            query = """
+                SELECT * FROM products
+                WHERE name LIKE %s OR brand LIKE %s OR category LIKE %s
+            """
+            like_term = f"%{search_term}%"
+            cursor.execute(query, (like_term, like_term, like_term))
+            matched_products = cursor.fetchall()
+
+            # If no matches, use rapidfuzz for fuzzy matching
+            if not matched_products:
+                logging.info("No direct SQL match found, using RapidFuzz fuzzy matching...")
+
+                # Build searchable strings
+                product_map = {
+                    f"{p['name']} {p['brand']} {p['category']}": p
+                    for p in all_products
+                }
+
+                # Get best matches by similarity ratio
+                results = process.extract(
+                    search_term,
+                    product_map.keys(),
+                    scorer=fuzz.WRatio,
+                    limit=5,
+                    score_cutoff=60  # Tune as needed
+                )
+
+                # Extract product records from matched strings
+                matched_products = [product_map[item[0]] for item in results]
+
+        else:
+            matched_products = all_products
+
+        cursor.close()
+        cnx.close()
+        # print(matched_products)
+        return matched_products
+
+    except Exception as e:
+        logging.error(f"Error occurred in fetch_products_with_search: {str(e)}")
+        return []
